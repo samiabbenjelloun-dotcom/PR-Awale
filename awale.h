@@ -20,6 +20,7 @@ typedef struct {
 void init_game(AwaleGame *game);
 int is_valid_move(AwaleGame *game, int hole);
 int play_move(AwaleGame *game, int hole);
+int must_feed_opponent(AwaleGame *game);
 int is_game_over(AwaleGame *game);
 void print_board(AwaleGame *game);
 

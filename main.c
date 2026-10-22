@@ -20,8 +20,17 @@ int main() {
             return 1;
         }
 
-        if (play_move(&game, hole-1) == -1) {
-            printf("Invalid move. Try again.\n");
+        int selected_hole = hole - 1;
+        if (play_move(&game, selected_hole) == -1) {
+            int start = game.current_player * (NB_HOLES / 2);
+            int end = start + NB_HOLES / 2;
+            if (must_feed_opponent(&game) &&
+                selected_hole >= start && selected_hole < end &&
+                game.board[selected_hole] > 0) {
+                printf("You must choose a move that feeds the opponent.\n");
+            } else {
+                printf("Invalid move. Try again.\n");
+            }
             continue;
         }
 
