@@ -3,7 +3,12 @@
 
 #include "awale.h"
 
-static int has_capturing_move(AwaleGame *game, int player);
+static const int clockwise_next[NB_HOLES] = {
+    1, 2, 3, 4, 5, 11, 0, 6, 7, 8, 9, 10
+};
+static const int anticlockwise_next[NB_HOLES] = {
+    6, 0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 5
+};
 
 static int has_seeds_on_side(const AwaleGame *game, int player) {
     int start = player * (NB_HOLES / 2);
@@ -17,20 +22,25 @@ static int has_seeds_on_side(const AwaleGame *game, int player) {
     return 0;
 }
 
+static int next_hole(const AwaleGame *game, int hole) {
+    return game->rotation == 0
+        ? clockwise_next[hole]
+        : anticlockwise_next[hole];
+}
+
+static int previous_hole(const AwaleGame *game, int hole) {
+    return game->rotation == 0
+        ? anticlockwise_next[hole]
+        : clockwise_next[hole];
+}
+
 static int sow_seeds(AwaleGame *game, int hole) {
-    const int anticlockwise_next[NB_HOLES] = {
-        6, 0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 5
-    };
     int seeds = game->board[hole];
     int index = hole;
     game->board[hole] = 0;
 
     while (seeds > 0) {
-        if (game->rotation == 0) {
-            index = (index + 1) % NB_HOLES;
-        } else {
-            index = anticlockwise_next[index];
-        }
+        index = next_hole(game, index);
 
         if (index == hole) {
             continue;
@@ -43,20 +53,13 @@ static int sow_seeds(AwaleGame *game, int hole) {
 }
 
 static void capture_seeds(AwaleGame *game, int index) {
-    if (game->rotation == 0) {
-        while (index >= NB_HOLES / 2 &&
-               (game->board[index] == 2 || game->board[index] == 3)) {
-            game->players[game->current_player].score += game->board[index];
-            game->board[index] = 0;
-            index--;
-        }
-    } else {
-        while (index < NB_HOLES / 2 &&
-               (game->board[index] == 2 || game->board[index] == 3)) {
-            game->players[game->current_player].score += game->board[index];
-            game->board[index] = 0;
-            index++;
-        }
+    int opponent = 1 - game->current_player;
+
+    while (index / (NB_HOLES / 2) == opponent &&
+           (game->board[index] == 2 || game->board[index] == 3)) {
+        game->players[game->current_player].score += game->board[index];
+        game->board[index] = 0;
+        index = previous_hole(game, index);
     }
 }
 
@@ -166,34 +169,7 @@ int is_game_over(AwaleGame *game) {
         return 1; // Game is over if the current player cannot feed the opponent
     }
 
-    if (!has_capturing_move(game, game->current_player)) {
-        return 1; // Game is over if the current player has no capturing moves
-    }
-
     return total_seeds == 0; // Game is over if there are no seeds left
-}
-
-static int has_capturing_move(AwaleGame *game, int player) {
-    int start = player * (NB_HOLES / 2);
-    int end = start + (NB_HOLES / 2);
-
-    for (int hole = start; hole < end; hole++) {
-        if (game->board[hole] == 0) {
-            continue; // trou vide : coup impossible
-        }
-
-        AwaleGame test = *game; // copie du plateau
-        test.current_player = player;
-
-        int score_before = test.players[player].score;
-
-        if (play_move(&test, hole) == 0 &&
-            test.players[player].score > score_before) {
-            return 1; // au moins un coup permet une capture
-        }
-    }
-
-    return 0; // aucun coup testé ne permet de capture
 }
 
 void print_board(AwaleGame *game) {
