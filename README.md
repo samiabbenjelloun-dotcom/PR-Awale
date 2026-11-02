@@ -33,3 +33,31 @@ Au démarrage, choisissez le sens du joueur 0 : `0` pour clockwise ou `1` pour a
 - `main.c` : boucle de jeu et saisie des coups.
 - `awale.c` : règles et logique du jeu.
 - `awale.h` : structures et déclarations partagées.
+
+## Jouer en réseau
+
+Le serveur accueille jusqu'à 32 clients dans un salon. Chaque client reçoit la liste des autres joueurs connectés ; les joueurs en partie y apparaissent avec le statut « in game » et ne peuvent pas être défiés. Les spectateurs apparaissent avec le statut « spectating ». Les joueurs en partie et les spectateurs ne reçoivent plus les mises à jour du salon. La commande `chat <message>` permet aux joueurs présents dans le salon d'échanger des messages ; pendant une partie, elle permet aux deux joueurs de discuter, et les spectateurs reçoivent aussi ces messages. Un spectateur ne peut pas envoyer de chat. Un client peut défier un joueur ; la partie commence lorsque celui-ci accepte. Pour observer une partie en cours, utilisez `observe <pseudo>` avec le nom d'un des joueurs, puis `stop` pour revenir au salon. L'observateur reçoit aussi les coups joués avant son arrivée. Les commandes du salon sont `list`, `chat <message>`, `challenge <pseudo>`, `accept <pseudo>`, `reject <pseudo>`, `observe <pseudo>` et `quit`. Les pseudos doivent être uniques, sans espace et limités à 31 caractères.
+
+Une fois le défi accepté, les clients vérifient et appliquent localement les règles avec `awale.c`, tandis que le serveur relaie les coups et vérifie le tour et le côté du trou. Il ne vérifie pas toutes les règles : ce prototype est destiné à des joueurs de confiance.
+
+Sous Windows avec MinGW, compilez depuis la racine du projet :
+
+```powershell
+gcc -Wall -Wextra -o server.exe server/server.c -lws2_32
+gcc -Wall -Wextra -o client.exe client/client.c awale.c -lws2_32
+```
+
+Lancez le serveur, avec `0` pour l'horaire ou `1` pour l'antihoraire :
+
+```powershell
+.\server.exe 0
+```
+
+Puis lancez un client dans chaque terminal :
+
+```powershell
+.\client.exe 127.0.0.1 Alice
+.\client.exe 127.0.0.1 Bob
+```
+
+Pour jouer sur deux machines, remplacez `127.0.0.1` par l'adresse IP de la machine qui héberge le serveur et autorisez le port TCP `1977` dans son pare-feu. Arrêtez le serveur avec Ctrl+C.
