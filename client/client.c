@@ -12,6 +12,8 @@ static void app(const char *address, const char *name);
 static int connect_to_server(const char *address);
 static int send_all(SOCKET sock, const char *message);
 static int send_chat_message(SOCKET sock, const char *input);
+static int send_bio(SOCKET sock);
+static void print_commands(void);
 
 #ifdef WIN32
 #include <conio.h>
@@ -151,15 +153,83 @@ static int wait_for_input(SOCKET sock, int allow_stdin, int *socket_ready,
    }
 }
 
+static void print_commands(void)
+{
+   puts("Commands:");
+   puts("  Lobby: list, chat <message>, quit");
+   puts("  Profile: bio, bio <name>");
+   puts("  Friends: friend add <name>, friend accept <name>");
+   puts("           friend reject <name>, friend remove <name>");
+   puts("           friends, friend requests");
+   puts("  Privacy: private on, private off");
+   puts("  History: games, review <id>");
+   puts("  Game: challenge <name>, accept <name>, reject <name>, observe <name>");
+}
+
 static int send_lobby_command(SOCKET sock, const char *input)
 {
    char name[32];
    char extra;
    char message[BUF_SIZE];
+   unsigned long game_id;
 
+   if (strcmp(input, "bio") == 0)
+   {
+      return send_bio(sock);
+   }
+   if (sscanf(input, "bio %31s %c", name, &extra) == 1)
+   {
+      snprintf(message, sizeof message, "BIO_GET %s\n", name);
+      return send_all(sock, message);
+   }
+   if (strcmp(input, "friends") == 0)
+   {
+      return send_all(sock, "FRIENDS\n");
+   }
+   if (strcmp(input, "friend requests") == 0)
+   {
+      return send_all(sock, "FRIEND_REQUESTS\n");
+   }
+   if (sscanf(input, "friend add %31s %c", name, &extra) == 1)
+   {
+      snprintf(message, sizeof message, "FRIEND_ADD %s\n", name);
+      return send_all(sock, message);
+   }
+   if (sscanf(input, "friend accept %31s %c", name, &extra) == 1)
+   {
+      snprintf(message, sizeof message, "FRIEND_ACCEPT %s\n", name);
+      return send_all(sock, message);
+   }
+   if (sscanf(input, "friend reject %31s %c", name, &extra) == 1)
+   {
+      snprintf(message, sizeof message, "FRIEND_REJECT %s\n", name);
+      return send_all(sock, message);
+   }
+   if (sscanf(input, "friend remove %31s %c", name, &extra) == 1)
+   {
+      snprintf(message, sizeof message, "FRIEND_REMOVE %s\n", name);
+      return send_all(sock, message);
+   }
+   if (strcmp(input, "private on") == 0)
+   {
+      return send_all(sock, "SET_PRIVATE ON\n");
+   }
+   if (strcmp(input, "private off") == 0)
+   {
+      return send_all(sock, "SET_PRIVATE OFF\n");
+   }
    if (strcmp(input, "list") == 0)
    {
       return send_all(sock, "LIST\n");
+   }
+   if (strcmp(input, "games") == 0)
+   {
+      return send_all(sock, "GAMES\n");
+   }
+   if (sscanf(input, "review %lu %c", &game_id, &extra) == 1)
+   {
+      snprintf(message, sizeof message, "REVIEW %lu\n", game_id);
+      return send_all(sock, message);
    }
    if (strncmp(input, "chat ", 5) == 0)
    {
@@ -190,8 +260,86 @@ static int send_lobby_command(SOCKET sock, const char *input)
       return 1;
    }
 
-   puts("Commands: list, chat <message>, challenge <name>, accept <name>, reject <name>, observe <name>, quit");
+   print_commands();
    return 0;
+}
+
+static int send_bio(SOCKET sock)
+{
+   char lines[BIO_MAX_LINES][BIO_LINE_MAX + 1];
+   char input[BIO_LINE_MAX + 2];
+   int line_count = 0;
+
+   puts("Enter up to 10 ASCII lines (80 characters max each). Press Enter for a blank line; type /done to finish early.");
+   while (line_count < BIO_MAX_LINES)
+   {
+      size_t length;
+      int valid = 1;
+
+      printf("%d: ", line_count + 1);
+      fflush(stdout);
+      if (fgets(input, sizeof input, stdin) == NULL)
+      {
+         return -1;
+      }
+      length = strlen(input);
+      if (length > 0 && input[length - 1] == '\n')
+      {
+         input[--length] = '\0';
+      }
+      else if (!feof(stdin))
+      {
+         int character;
+         while ((character = getchar()) != '\n' && character != EOF)
+         {
+         }
+         puts("Bio lines must be at most 80 characters.");
+         continue;
+      }
+      if (length > 0 && input[length - 1] == '\r')
+      {
+         input[--length] = '\0';
+      }
+      if (strcmp(input, "/done") == 0)
+      {
+         break;
+      }
+      for (size_t i = 0; i < length; i++)
+      {
+         unsigned char character = (unsigned char)input[i];
+         if (character < 0x20 || character > 0x7e)
+         {
+            valid = 0;
+            break;
+         }
+      }
+      if (!valid)
+      {
+         puts("Bio lines must contain printable ASCII characters only.");
+         continue;
+      }
+      strcpy(lines[line_count++], input);
+   }
+   if (line_count == 0)
+   {
+      puts("A bio must contain at least one line.");
+      return 0;
+   }
+
+   if (send_all(sock, "BIO_SET_BEGIN\n") != 0)
+   {
+      return -1;
+   }
+   for (int i = 0; i < line_count; i++)
+   {
+      char message[BUF_SIZE];
+      snprintf(message, sizeof message, "BIO_LINE %s\n", lines[i]);
+      if (send_all(sock, message) != 0)
+      {
+         return -1;
+      }
+   }
+   return send_all(sock, "BIO_SET_END\n");
 }
 
 static int send_chat_message(SOCKET sock, const char *input)
@@ -221,10 +369,12 @@ static int send_chat_message(SOCKET sock, const char *input)
 static int handle_server_message(const char *line, AwaleGame *game,
                                  int *game_active, int *player_id,
                                  int *move_pending, int *end_sent,
-                                 int *spectating)
+                                 int *spectating, int *review_mode,
+                                 int *players_found)
 {
    if (strcmp(line, "PLAYERS_BEGIN") == 0)
    {
+      *players_found = 0;
       puts("\nConnected players:");
       return 0;
    }
@@ -238,6 +388,7 @@ static int handle_server_message(const char *line, AwaleGame *game,
          fprintf(stderr, "Invalid player-list message from server.\n");
          return -1;
       }
+      (*players_found)++;
       if (strcmp(status, "IN_GAME") == 0)
       {
          printf("  %s (in game)\n", name);
@@ -259,7 +410,187 @@ static int handle_server_message(const char *line, AwaleGame *game,
    }
    if (strcmp(line, "PLAYERS_END") == 0)
    {
-      puts("Commands: list, chat <message>, challenge <name>, accept <name>, reject <name>, observe <name>, quit");
+      if (*players_found == 0)
+      {
+         puts("  No other players connected.");
+      }
+      return 0;
+   }
+   if (strcmp(line, "GAMES_BEGIN") == 0)
+   {
+      puts("\nSaved games:");
+      return 0;
+   }
+   if (strcmp(line, "GAMES_EMPTY") == 0)
+   {
+      puts("  No saved games yet.");
+      return 0;
+   }
+   if (strncmp(line, "SAVED_GAME ", 11) == 0)
+   {
+      unsigned long game_id;
+      unsigned long move_count;
+      int rotation;
+      char player0[32];
+      char player1[32];
+      char extra;
+      if (sscanf(line, "SAVED_GAME %lu %d %31s %31s %lu %c", &game_id,
+                 &rotation, player0, player1, &move_count, &extra) != 5)
+      {
+         fprintf(stderr, "Invalid saved-game message from server.\n");
+         return -1;
+      }
+      printf("  #%lu: %s vs %s (%lu moves, %s)\n", game_id, player0,
+             player1, move_count,
+             rotation == 0 ? "clockwise" : "anticlockwise");
+      return 0;
+   }
+   if (strcmp(line, "GAMES_END") == 0)
+   {
+      return 0;
+   }
+   if (strncmp(line, "REVIEW_BEGIN ", 13) == 0)
+   {
+      unsigned long game_id;
+      unsigned long move_count;
+      int rotation;
+      char player0[32];
+      char player1[32];
+      char extra;
+      if (sscanf(line, "REVIEW_BEGIN %lu %d %31s %31s %lu %c", &game_id,
+                 &rotation, player0, player1, &move_count, &extra) != 5 ||
+          (rotation != 0 && rotation != 1))
+      {
+         fprintf(stderr, "Invalid game review message from server.\n");
+         return -1;
+      }
+      init_game_with_rotation(game, rotation);
+      *game_active = 1;
+      *review_mode = 1;
+      *spectating = 0;
+      *player_id = -1;
+      *move_pending = 0;
+      *end_sent = 0;
+      printf("\nReviewing game #%lu: %s vs %s (%lu moves).\n", game_id,
+             player0, player1, move_count);
+      print_board(game);
+      return 0;
+   }
+   if (strcmp(line, "REVIEW_END") == 0)
+   {
+      *game_active = 0;
+      *review_mode = 0;
+      *player_id = -1;
+      puts("Replay finished; returned to the lobby.");
+      return 0;
+   }
+   if (strncmp(line, "GAME_SAVED ", 11) == 0)
+   {
+      printf("Game saved as #%s.\n", line + 11);
+      return 0;
+   }
+   if (strcmp(line, "GAME_SAVE_FAILED") == 0)
+   {
+      puts("The game ended, but the server could not save it.");
+      return 0;
+   }
+   if (strcmp(line, "FRIENDS_BEGIN") == 0)
+   {
+      puts("\nFriends:");
+      return 0;
+   }
+   if (strncmp(line, "FRIEND ", 7) == 0)
+   {
+      printf("  %s\n", line + 7);
+      return 0;
+   }
+   if (strcmp(line, "FRIENDS_END") == 0)
+   {
+      return 0;
+   }
+   if (strcmp(line, "FRIEND_REQUESTS_BEGIN") == 0)
+   {
+      puts("\nIncoming friend requests:");
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_REQUEST_FROM ", 20) == 0)
+   {
+      printf("  %s\n", line + 20);
+      return 0;
+   }
+   if (strcmp(line, "FRIEND_REQUESTS_END") == 0)
+   {
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_REQUEST ", 15) == 0)
+   {
+      printf("Friend request from %s. Use 'friend accept %s' or 'friend reject %s'.\n",
+             line + 15, line + 15, line + 15);
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_REQUEST_SENT ", 20) == 0)
+   {
+      printf("Friend request sent to %s.\n", line + 20);
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_REQUEST_REJECTED ", 24) == 0)
+   {
+      printf("%s rejected your friend request.\n", line + 24);
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_REQUEST_DECLINED ", 24) == 0)
+   {
+      printf("Friend request from %s rejected.\n", line + 24);
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_REQUEST_CANCELLED ", 25) == 0)
+   {
+      printf("Friend request involving %s was cancelled because a player disconnected.\n",
+             line + 25);
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_ADDED ", 13) == 0)
+   {
+      printf("%s added to your friends.\n", line + 13);
+      return 0;
+   }
+   if (strncmp(line, "FRIEND_REMOVED ", 15) == 0)
+   {
+      printf("%s removed from your friends.\n", line + 15);
+      return 0;
+   }
+   if (strcmp(line, "PRIVATE ON") == 0)
+   {
+      puts("Private mode enabled.");
+      return 0;
+   }
+   if (strcmp(line, "PRIVATE OFF") == 0)
+   {
+      puts("Private mode disabled.");
+      return 0;
+   }
+   if (strncmp(line, "BIO_BEGIN ", 10) == 0)
+   {
+      printf("\nBio of %s:\n", line + 10);
+      return 0;
+   }
+   if (strncmp(line, "BIO_LINE ", 9) == 0)
+   {
+      printf("  %s\n", line + 9);
+      return 0;
+   }
+   if (strcmp(line, "BIO_END") == 0)
+   {
+      return 0;
+   }
+   if (strncmp(line, "BIO_EMPTY ", 10) == 0)
+   {
+      printf("%s does not have a bio.\n", line + 10);
+      return 0;
+   }
+   if (strcmp(line, "BIO_SAVED") == 0)
+   {
+      puts("Bio saved.");
       return 0;
    }
    if (strncmp(line, "CHAT ", 5) == 0)
@@ -342,13 +673,16 @@ static int handle_server_message(const char *line, AwaleGame *game,
       print_board(game);
       return 0;
    }
-   if (strncmp(line, "MOVE ", 5) == 0)
+      if (strncmp(line, "MOVE ", 5) == 0 ||
+         strncmp(line, "REVIEW_MOVE ", 12) == 0)
    {
       int move_player;
       int hole;
       char extra;
+        int is_review_move = strncmp(line, "REVIEW_MOVE ", 12) == 0;
+        const char *move_data = line + (is_review_move ? 12 : 5);
       if (!*game_active ||
-          sscanf(line, "MOVE %d %d %c", &move_player, &hole, &extra) != 2 ||
+           sscanf(move_data, "%d %d %c", &move_player, &hole, &extra) != 2 ||
           move_player != game->current_player ||
           hole < 1 || hole > NB_HOLES ||
           play_move(game, hole - 1) != 0)
@@ -358,7 +692,14 @@ static int handle_server_message(const char *line, AwaleGame *game,
       }
       game->current_player = 1 - game->current_player;
       *move_pending = 0;
-      putchar('\n');
+      if (is_review_move)
+      {
+         printf("\nReplay: player %d plays hole %d.\n", move_player, hole);
+      }
+      else
+      {
+         putchar('\n');
+      }
       print_board(game);
       if (is_game_over(game) && *player_id == 0 && !*end_sent)
       {
@@ -389,6 +730,14 @@ static int handle_server_message(const char *line, AwaleGame *game,
       *spectating = 0;
       *move_pending = 0;
       puts("Stopped watching; returned to the lobby.");
+      return 0;
+   }
+   if (strcmp(line, "SPECTATE_REVOKED") == 0)
+   {
+      *game_active = 0;
+      *spectating = 0;
+      *move_pending = 0;
+      puts("You are no longer allowed to watch this private game.");
       return 0;
    }
 
@@ -450,16 +799,21 @@ static void app(const char *address, const char *name)
    int end_sent = 0;
    int prompt_state = 0;
    int spectating = 0;
+   int review_mode = 0;
+   int players_found = 0;
    int stop_pending = 0;
 
-   puts("Connected to lobby. Use 'list', 'chat <message>', 'challenge <name>', or 'observe <name>'.");
+   puts("Connected to lobby.");
+   print_commands();
    while (1)
    {
       int socket_ready;
       int stdin_ready;
-      int can_enter_move = game_active && player_id == game.current_player &&
+      int can_enter_move = !review_mode && game_active &&
+                  player_id == game.current_player &&
                            !move_pending;
-      int allow_stdin = !game_active || !spectating || !stop_pending;
+      int allow_stdin = !review_mode &&
+               (!game_active || !spectating || !stop_pending);
       if (wait_for_input(sock, allow_stdin, &socket_ready, &stdin_ready) != 0)
       {
          break;
@@ -476,7 +830,8 @@ static void app(const char *address, const char *name)
          }
          int handled = handle_server_message(line, &game, &game_active,
                                              &player_id, &move_pending,
-                                             &end_sent, &spectating);
+                                             &end_sent, &spectating,
+                                             &review_mode, &players_found);
          if (handled < 0)
          {
             break;
@@ -484,6 +839,9 @@ static void app(const char *address, const char *name)
          fflush(stdout);
          if (strncmp(line, "START ", 6) == 0 ||
              strncmp(line, "SPECTATE_START ", 15) == 0 ||
+             strncmp(line, "REVIEW_BEGIN ", 13) == 0 ||
+             strncmp(line, "REVIEW_MOVE ", 12) == 0 ||
+             strcmp(line, "REVIEW_END") == 0 ||
              strncmp(line, "MOVE ", 5) == 0 ||
              strncmp(line, "GAME_OVER", 9) == 0)
          {
@@ -494,6 +852,7 @@ static void app(const char *address, const char *name)
             prompt_state = 0;
          }
          if (strcmp(line, "SPECTATE_STOPPED") == 0 ||
+             strcmp(line, "SPECTATE_REVOKED") == 0 ||
              strncmp(line, "GAME_OVER", 9) == 0)
          {
             stop_pending = 0;
@@ -504,7 +863,8 @@ static void app(const char *address, const char *name)
          }
       }
 
-      can_enter_move = game_active && player_id == game.current_player &&
+      can_enter_move = !review_mode && game_active &&
+                 player_id == game.current_player &&
                        !move_pending;
       if (can_enter_move && prompt_state != 1)
       {
@@ -514,8 +874,8 @@ static void app(const char *address, const char *name)
          fflush(stdout);
          prompt_state = 1;
       }
-      else if (game_active && !spectating && !move_pending && !can_enter_move &&
-               prompt_state != 2)
+      else if (game_active && !spectating && !review_mode && !move_pending &&
+            !can_enter_move && prompt_state != 2)
       {
          fputs("Waiting for opponent (chat <message>): ", stdout);
          fflush(stdout);
@@ -581,7 +941,7 @@ static void app(const char *address, const char *name)
             break;
          }
       }
-      else if (stdin_ready && game_active && !spectating)
+      else if (stdin_ready && game_active && !spectating && !review_mode)
       {
          char input[BUF_SIZE];
          int hole;
