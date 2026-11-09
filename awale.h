@@ -3,7 +3,7 @@
 
 /* The board is stored as two consecutive six-hole sides, one per player. */
 #define NB_HOLES 12
-#define INITIAL_SEEDS 4
+#define INITIAL_SEEDS 1
 
 typedef struct
 {

@@ -341,7 +341,7 @@ void print_game_result(const AwaleGame *game)
 
     int winner = game->players[0].score > game->players[1].score ? 0 : 1;
     int runner_up = 1 - winner;
-    printf("Winner: %s (%d points). %s scored %d points.\n",
+    printf("\nWinner: %s (%d points).\n%s scored %d points.\n",
            game->players[winner].name, game->players[winner].score,
            game->players[runner_up].name, game->players[runner_up].score);
 }
