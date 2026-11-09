@@ -28,5 +28,6 @@ int play_move(AwaleGame *game, int hole);
 int must_feed_opponent(AwaleGame *game);
 int is_game_over(AwaleGame *game);
 void print_board(AwaleGame *game);
+void print_game_result(const AwaleGame *game);
 
 #endif // AWALE_H

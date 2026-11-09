@@ -244,3 +244,20 @@ void print_board(AwaleGame *game)
            game->players[0].name, game->players[0].score,
            game->players[1].name, game->players[1].score);
 }
+
+void print_game_result(const AwaleGame *game)
+{
+    if (game->players[0].score == game->players[1].score)
+    {
+        printf("The game is a draw: %s and %s both scored %d points.\n",
+               game->players[0].name, game->players[1].name,
+               game->players[0].score);
+        return;
+    }
+
+    int winner = game->players[0].score > game->players[1].score ? 0 : 1;
+    int runner_up = 1 - winner;
+    printf("Winner: %s (%d points). %s scored %d points.\n",
+           game->players[winner].name, game->players[winner].score,
+           game->players[runner_up].name, game->players[runner_up].score);
+}

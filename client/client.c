@@ -734,7 +734,7 @@ static int handle_server_message(const char *line, AwaleGame *game,
       }
       else
       {
-         puts("Game ended.");
+         print_game_result(game);
       }
       *game_active = 0;
       *spectating = 0;
