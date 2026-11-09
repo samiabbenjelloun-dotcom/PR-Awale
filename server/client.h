@@ -9,9 +9,11 @@ typedef struct
    char name[BUF_SIZE];
    char bio[BIO_MAX_LINES][BIO_LINE_MAX + 1];
    int bio_line_count;
+   /* Bio edits are staged here and committed only after BIO_SET_END. */
    char pending_bio[BIO_MAX_LINES][BIO_LINE_MAX + 1];
    int pending_bio_line_count;
    int bio_editing;
+   /* Friendship and privacy state exists only for the current server session. */
    char friends[MAX_CLIENTS][32];
    int friend_count;
    char friend_requests[MAX_CLIENTS][32];

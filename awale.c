@@ -3,6 +3,7 @@
 
 #include "awale.h"
 
+/* These tables encode the board traversal order, including the turn between rows. */
 static const int clockwise_next[NB_HOLES] = {
     1, 2, 3, 4, 5, 11, 0, 6, 7, 8, 9, 10};
 static const int anticlockwise_next[NB_HOLES] = {
@@ -47,6 +48,7 @@ static int sow_seeds(AwaleGame *game, int hole)
     {
         index = next_hole(game, index);
 
+        /* A sowing lap skips the starting hole, as required by Awale rules. */
         if (index == hole)
         {
             continue;
@@ -62,6 +64,7 @@ static void capture_seeds(AwaleGame *game, int index)
 {
     int opponent = 1 - game->current_player;
 
+    /* Capture backwards from the last sown hole while opponent pits hold 2 or 3 seeds. */
     while (index / (NB_HOLES / 2) == opponent &&
            (game->board[index] == 2 || game->board[index] == 3))
     {
@@ -73,6 +76,7 @@ static void capture_seeds(AwaleGame *game, int index)
 
 static int move_feeds_opponent(const AwaleGame *game, int hole, int player)
 {
+    /* Simulate the move on a copy so checking the feeding rule never changes the real game. */
     AwaleGame test = *game;
     int last_hole = sow_seeds(&test, hole);
     capture_seeds(&test, last_hole);
@@ -97,6 +101,7 @@ static int has_feeding_move(AwaleGame *game, int player)
 int must_feed_opponent(AwaleGame *game)
 {
     int opponent = 1 - game->current_player;
+    /* Feeding is mandatory only when the opponent's side is empty and a feeding move exists. */
     return !has_seeds_on_side(game, opponent) &&
            has_feeding_move(game, game->current_player);
 }
@@ -174,6 +179,7 @@ int is_game_over(AwaleGame *game)
         total_seeds += game->board[i];
     }
 
+    /* A player reaching 25 wins; 24-24 is also a terminal draw. */
     if (game->players[0].score >= 25 || game->players[1].score >= 25)
     {
         return 1; // Game is over if a player has 25 or more seeds
@@ -202,6 +208,7 @@ int is_game_over(AwaleGame *game)
         return 1; // Game is over if the current player has no valid moves
     }
 
+    /* Stop if the player cannot feed an empty opponent side. */
     if (!has_seeds_on_side(game, 1 - game->current_player) &&
         !has_feeding_move(game, game->current_player))
     {

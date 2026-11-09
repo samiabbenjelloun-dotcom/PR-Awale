@@ -26,6 +26,7 @@ int main()
             return 1;
         }
 
+        /* The prompt uses holes numbered from 1, while the board uses zero-based indexes. */
         int selected_hole = hole - 1;
         if (play_move(&game, selected_hole) == -1)
         {

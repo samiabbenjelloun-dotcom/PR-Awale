@@ -20,6 +20,7 @@ typedef struct
    int hole;
 } MoveRecord;
 
+/* Dynamically grown move list retained for spectators and replay persistence. */
 typedef struct
 {
    MoveRecord *moves;
@@ -138,6 +139,7 @@ static int can_observe_game(Client *clients, int observer, int player_a,
    {
       return 1;
    }
+   /* If either player made the game private, friendship with either one grants access. */
    return is_friend(&clients[player_a], clients[observer].name) ||
           is_friend(&clients[player_b], clients[observer].name);
 }
@@ -164,6 +166,7 @@ static int valid_bio_line(const char *line)
    {
       return 0;
    }
+   /* Restrict bios to printable single-byte ASCII for safe line-protocol transport. */
    for (size_t i = 0; i < length; i++)
    {
       unsigned char character = (unsigned char)line[i];
@@ -215,6 +218,7 @@ static int read_saved_game(FILE *file, SavedGame *game, GameHistory *history)
    char extra;
    unsigned long move_count;
 
+   /* Each archive record is a GAME header, its declared MOVE lines, then END_GAME. */
    if (fgets(line, sizeof line, file) == NULL)
    {
       return 0;
@@ -287,6 +291,7 @@ static int save_game(unsigned long id, int rotation, const char *player0,
       return -1;
    }
 
+   /* Keep the on-disk format aligned with read_saved_game(). */
    int failed = fprintf(file, "GAME 1 %lu %d %s %s %lu\n", id, rotation,
                        player0, player1,
                        (unsigned long)history->count) < 0;
@@ -471,6 +476,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
    char extra;
    unsigned long game_id;
 
+   /* Every connection must register its unique name before using lobby commands. */
    if (clients[sender].name[0] == '\0')
    {
       if (sscanf(line, "HELLO %31s %c", name, &extra) != 1 ||
@@ -523,6 +529,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
             clients[sender].bio_editing = 0;
             return write_error(clients, sender, "a bio must contain at least one line");
          }
+         /* Commit the staged bio only after all lines have passed validation. */
          clients[sender].bio_line_count = clients[sender].pending_bio_line_count;
          memcpy(clients[sender].bio, clients[sender].pending_bio,
                 sizeof clients[sender].bio);
@@ -882,6 +889,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       game_peer[sender] = challenger;
       game_peer[challenger] = sender;
       clear_history(&history[challenger]);
+      /* The challenger owns the replay and is player 0; the accepter is player 1. */
       role[challenger] = 0;
       role[sender] = 1;
       turn[challenger] = 0;
@@ -912,6 +920,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
    {
       int peer = game_peer[sender];
       char message[BUF_SIZE];
+      /* The server enforces turn and side ownership; full move legality is checked by clients. */
       if (player != role[sender] || hole < 1 || hole > NB_HOLES ||
           (role[sender] == 0 && hole > NB_HOLES / 2) ||
           (role[sender] == 1 && hole <= NB_HOLES / 2))
@@ -977,6 +986,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       {
          return -1;
       }
+      /* Catch the new spectator up before relaying future moves. */
       for (size_t i = 0; i < history[history_owner].count; i++)
       {
          snprintf(message, sizeof message, "MOVE %d %d\n",
@@ -1007,6 +1017,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       int peer = game_peer[sender];
       int history_owner = role[sender] == 0 ? sender : peer;
       unsigned long saved_game_id = *next_game_id;
+      /* Only a normal game completion reaches this path; disconnects discard its history. */
       int saved = saved_game_id != 0 &&
                   save_game(saved_game_id, rotation,
                             clients[history_owner].name,
@@ -1183,6 +1194,7 @@ static void app(int rotation)
    printf("Lobby listening on port %d. Rotation: %s.\n", PORT,
           rotation == 0 ? "clockwise" : "anticlockwise");
 
+   /* select() lets one process serve the lobby and every connected client. */
    while (1)
    {
       fd_set readable;

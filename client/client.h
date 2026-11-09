@@ -30,6 +30,7 @@ typedef struct in_addr IN_ADDR;
 #define CRLF "\r\n"
 #define PORT 1977
 
+/* Keep these protocol limits in sync with the server definitions. */
 #define BUF_SIZE 1024
 #define BIO_MAX_LINES 10
 #define BIO_LINE_MAX 80

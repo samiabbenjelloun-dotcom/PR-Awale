@@ -50,6 +50,7 @@ static int send_all(SOCKET sock, const char *message)
    const int flags = 0;
 #endif
 
+   /* TCP may accept only part of a buffer, so keep sending until it is complete. */
    while (sent < length)
    {
       int n = send(sock, message + sent, (int)(length - sent), flags);
@@ -173,6 +174,7 @@ static int send_lobby_command(SOCKET sock, const char *input)
    char message[BUF_SIZE];
    unsigned long game_id;
 
+   /* Translate the user-facing commands into the server's line protocol. */
    if (strcmp(input, "bio") == 0)
    {
       return send_bio(sock);
@@ -326,6 +328,7 @@ static int send_bio(SOCKET sock)
       return 0;
    }
 
+   /* Send the bio as a transaction so the server can validate it before replacing the old one. */
    if (send_all(sock, "BIO_SET_BEGIN\n") != 0)
    {
       return -1;
@@ -372,6 +375,7 @@ static int handle_server_message(const char *line, AwaleGame *game,
                                  int *spectating, int *review_mode,
                                  int *players_found)
 {
+   /* Apply server events to the local UI and keep its game/session state synchronized. */
    if (strcmp(line, "PLAYERS_BEGIN") == 0)
    {
       *players_found = 0;
@@ -681,6 +685,7 @@ static int handle_server_message(const char *line, AwaleGame *game,
       char extra;
         int is_review_move = strncmp(line, "REVIEW_MOVE ", 12) == 0;
         const char *move_data = line + (is_review_move ? 12 : 5);
+      /* Both live moves and replay moves are checked by the shared Awale rules engine. */
       if (!*game_active ||
            sscanf(move_data, "%d %d %c", &move_player, &hole, &extra) != 2 ||
           move_player != game->current_player ||
@@ -756,6 +761,7 @@ static int connect_to_server(const char *address)
       perror("socket()");
       return INVALID_SOCKET;
    }
+   /* Resolve hostnames as well as numeric IPv4 addresses before connecting. */
    hostinfo = gethostbyname(address);
    if (hostinfo == NULL || hostinfo->h_addr_list[0] == NULL)
    {
@@ -805,6 +811,7 @@ static void app(const char *address, const char *name)
 
    puts("Connected to lobby.");
    print_commands();
+   /* Handle socket events and console input together without blocking either side. */
    while (1)
    {
       int socket_ready;

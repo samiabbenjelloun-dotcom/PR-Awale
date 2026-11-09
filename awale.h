@@ -1,6 +1,7 @@
 #ifndef AWALE_H
 #define AWALE_H
 
+/* The board is stored as two consecutive six-hole sides, one per player. */
 #define NB_HOLES 12
 #define INITIAL_SEEDS 4
 
@@ -16,7 +17,7 @@ typedef struct
     int board[NB_HOLES];
     Player players[2];
     int current_player;
-    int rotation; // 0 for normal, 1 for rotated
+    int rotation; // 0 for clockwise sowing, 1 for anticlockwise sowing
 } AwaleGame;
 
 void init_game(AwaleGame *game);
