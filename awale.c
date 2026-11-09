@@ -117,6 +117,8 @@ void init_game_with_rotation(AwaleGame *game, int rotation)
         game->players[i].id = i;
         game->players[i].score = 0;
         game->players[i].order = i;
+        snprintf(game->players[i].name, sizeof game->players[i].name,
+                 "Player %d", i);
     }
     game->current_player = 0; // Player 0 starts
     game->rotation = rotation;
@@ -230,5 +232,7 @@ void print_board(AwaleGame *game)
             printf("\n"); // New line after half the holes
         }
     }
-    printf("\nScores:\n   - Player 0: %d\n   - Player 1: %d\n", game->players[0].score, game->players[1].score);
+    printf("\nScores:\n   - %s: %d\n   - %s: %d\n",
+           game->players[0].name, game->players[0].score,
+           game->players[1].name, game->players[1].score);
 }

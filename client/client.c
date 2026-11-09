@@ -373,7 +373,7 @@ static int handle_server_message(const char *line, AwaleGame *game,
                                  int *game_active, int *player_id,
                                  int *move_pending, int *end_sent,
                                  int *spectating, int *review_mode,
-                                 int *players_found)
+                                 int *players_found, const char *local_name)
 {
    /* Apply server events to the local UI and keep its game/session state synchronized. */
    if (strcmp(line, "PLAYERS_BEGIN") == 0)
@@ -469,6 +469,10 @@ static int handle_server_message(const char *line, AwaleGame *game,
          return -1;
       }
       init_game_with_rotation(game, rotation);
+      snprintf(game->players[0].name, sizeof game->players[0].name, "%s",
+               player0);
+      snprintf(game->players[1].name, sizeof game->players[1].name, "%s",
+               player1);
       *game_active = 1;
       *review_mode = 1;
       *spectating = 0;
@@ -643,6 +647,10 @@ static int handle_server_message(const char *line, AwaleGame *game,
          return -1;
       }
       init_game_with_rotation(game, rotation);
+      snprintf(game->players[*player_id].name,
+               sizeof game->players[*player_id].name, "%s", local_name);
+      snprintf(game->players[1 - *player_id].name,
+               sizeof game->players[1 - *player_id].name, "%s", opponent);
       *game_active = 1;
       *spectating = 0;
       *move_pending = 0;
@@ -667,6 +675,10 @@ static int handle_server_message(const char *line, AwaleGame *game,
          return -1;
       }
       init_game_with_rotation(game, rotation);
+      snprintf(game->players[0].name, sizeof game->players[0].name, "%s",
+               player0);
+      snprintf(game->players[1].name, sizeof game->players[1].name, "%s",
+               player1);
       *game_active = 1;
       *spectating = 1;
       *player_id = -1;
@@ -838,7 +850,8 @@ static void app(const char *address, const char *name)
          int handled = handle_server_message(line, &game, &game_active,
                                              &player_id, &move_pending,
                                              &end_sent, &spectating,
-                                             &review_mode, &players_found);
+                                             &review_mode, &players_found,
+                                             name);
          if (handled < 0)
          {
             break;

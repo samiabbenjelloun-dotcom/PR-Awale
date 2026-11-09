@@ -10,6 +10,7 @@ typedef struct
     int id;
     int score;
     int order; // 0 for first player, 1 for second player
+    char name[32];
 } Player;
 
 typedef struct

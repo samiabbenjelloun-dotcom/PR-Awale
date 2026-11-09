@@ -50,6 +50,8 @@ int main()
     }
 
     print_board(&game);
-    printf("Game over! Player 0 score: %d, Player 1 score: %d\n", game.players[0].score, game.players[1].score);
+    printf("Game over! %s score: %d, %s score: %d\n",
+           game.players[0].name, game.players[0].score,
+           game.players[1].name, game.players[1].score);
     return 0;
 }
