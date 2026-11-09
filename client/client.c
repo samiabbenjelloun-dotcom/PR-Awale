@@ -888,7 +888,8 @@ static void app(const char *address, const char *name)
                        !move_pending;
       if (can_enter_move && prompt_state != 1)
       {
-         printf("Your turn (hole %d-%d or chat <message>): ",
+         printf("Your turn (%s row, holes %d-%d or chat <message>): ",
+                player_id == 0 ? "top" : "bottom",
                 player_id * (NB_HOLES / 2) + 1,
                 (player_id + 1) * (NB_HOLES / 2));
          fflush(stdout);
@@ -897,7 +898,11 @@ static void app(const char *address, const char *name)
       else if (game_active && !spectating && !review_mode && !move_pending &&
             !can_enter_move && prompt_state != 2)
       {
-         fputs("Waiting for opponent (chat <message>): ", stdout);
+         int opponent = 1 - player_id;
+         printf("Waiting for opponent (%s row, holes %d-%d; chat <message>): ",
+                opponent == 0 ? "top" : "bottom",
+                opponent * (NB_HOLES / 2) + 1,
+                (opponent + 1) * (NB_HOLES / 2));
          fflush(stdout);
          prompt_state = 2;
       }

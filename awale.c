@@ -223,14 +223,22 @@ int is_game_over(AwaleGame *game)
 void print_board(AwaleGame *game)
 {
     printf("Current board:\n");
-    for (int i = 0; i < NB_HOLES; i++)
+    for (int row = 0; row < 2; row++)
     {
-        printf("%d ", game->board[i]);
+        int start = row * (NB_HOLES / 2);
+        const char *row_name = row == 0 ? "Top" : "Bottom";
 
-        if (i == NB_HOLES / 2 - 1)
+        printf("%s row (%s)\n", row_name, game->players[row].name);
+        for (int i = start; i < start + NB_HOLES / 2; i++)
         {
-            printf("\n"); // New line after half the holes
+            printf("%4d", i + 1);
         }
+        printf("\n");
+        for (int i = start; i < start + NB_HOLES / 2; i++)
+        {
+            printf("%4d", game->board[i]);
+        }
+        printf("\n");
     }
     printf("\nScores:\n   - %s: %d\n   - %s: %d\n",
            game->players[0].name, game->players[0].score,

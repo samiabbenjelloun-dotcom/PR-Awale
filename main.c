@@ -13,11 +13,13 @@ int main()
         print_board(&game);
         if (game.current_player == 0)
         {
-            printf("Player 0's turn. Enter hole index (1-%d): ", NB_HOLES / 2);
+            printf("%s's turn (top row, holes 1-%d): ",
+                   game.players[0].name, NB_HOLES / 2);
         }
         else
         {
-            printf("Player 1's turn. Enter hole index (%d-%d): ", NB_HOLES / 2 + 1, NB_HOLES);
+            printf("%s's turn (bottom row, holes %d-%d): ",
+                   game.players[1].name, NB_HOLES / 2 + 1, NB_HOLES);
         }
         int hole;
         if (scanf("%d", &hole) != 1)
