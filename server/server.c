@@ -32,9 +32,12 @@ typedef struct
 {
    unsigned long id;
    int rotation;
+   int is_private;
    char player0[32];
    char player1[32];
    unsigned long move_count;
+   char allowed_reviewers[MAX_CLIENTS * 2][32];
+   size_t allowed_reviewer_count;
 } SavedGame;
 
 #define GAMES_FILE "games.txt"
@@ -217,16 +220,54 @@ static int read_saved_game(FILE *file, SavedGame *game, GameHistory *history)
    int version;
    char extra;
    unsigned long move_count;
+   int reviewer_count = 0;
 
    /* Each archive record is a GAME header, its declared MOVE lines, then END_GAME. */
    if (fgets(line, sizeof line, file) == NULL)
    {
       return 0;
    }
-   if (sscanf(line, "GAME %d %lu %d %31s %31s %lu %c", &version,
-              &game->id, &game->rotation, game->player0, game->player1,
-              &move_count, &extra) != 6 ||
-       version != 1 || (game->rotation != 0 && game->rotation != 1))
+   if (sscanf(line, "GAME %d", &version) != 1)
+   {
+      return -1;
+   }
+   if (version == 1)
+   {
+      if (sscanf(line, "GAME %d %lu %d %31s %31s %lu %c", &version,
+                 &game->id, &game->rotation, game->player0, game->player1,
+                 &move_count, &extra) != 6)
+      {
+         return -1;
+      }
+      game->is_private = 0;
+   }
+   else if (version == 2)
+   {
+      if (sscanf(line, "GAME %d %lu %d %d %31s %31s %lu %d %c", &version,
+                 &game->id, &game->rotation, &game->is_private,
+                 game->player0, game->player1, &move_count,
+                 &reviewer_count, &extra) != 8 ||
+          (game->is_private != 0 && game->is_private != 1) ||
+          reviewer_count < 0 || reviewer_count > MAX_CLIENTS * 2)
+      {
+         return -1;
+      }
+      game->allowed_reviewer_count = (size_t)reviewer_count;
+      for (int i = 0; i < reviewer_count; i++)
+      {
+         if (fgets(line, sizeof line, file) == NULL ||
+             sscanf(line, "ACCESS %31s %c",
+                    game->allowed_reviewers[i], &extra) != 1)
+         {
+            return -1;
+         }
+      }
+   }
+   else
+   {
+      return -1;
+   }
+   if (game->rotation != 0 && game->rotation != 1)
    {
       return -1;
    }
@@ -252,6 +293,24 @@ static int read_saved_game(FILE *file, SavedGame *game, GameHistory *history)
       return -1;
    }
    return 1;
+}
+
+static int can_review_game(const SavedGame *game, const char *name)
+{
+   if (!game->is_private ||
+       strcmp(name, game->player0) == 0 ||
+       strcmp(name, game->player1) == 0)
+   {
+      return 1;
+   }
+   for (size_t i = 0; i < game->allowed_reviewer_count; i++)
+   {
+      if (strcmp(name, game->allowed_reviewers[i]) == 0)
+      {
+         return 1;
+      }
+   }
+   return 0;
 }
 
 static unsigned long load_next_game_id(void)
@@ -282,8 +341,43 @@ static unsigned long load_next_game_id(void)
    return max_id == ULONG_MAX ? 0 : max_id + 1;
 }
 
-static int save_game(unsigned long id, int rotation, const char *player0,
-                     const char *player1, const GameHistory *history)
+static int add_reviewers_from_player(char reviewers[MAX_CLIENTS * 2][32],
+                                     size_t *reviewer_count,
+                                     const Client *player,
+                                     const char *player0_name,
+                                     const char *player1_name)
+{
+   for (int i = 0; i < player->friend_count; i++)
+   {
+      const char *name = player->friends[i];
+      if (strcmp(name, player0_name) == 0 || strcmp(name, player1_name) == 0)
+      {
+         continue;
+      }
+      int already_added = 0;
+      for (size_t j = 0; j < *reviewer_count; j++)
+      {
+         if (strcmp(reviewers[j], name) == 0)
+         {
+            already_added = 1;
+            break;
+         }
+      }
+      if (!already_added)
+      {
+         if (*reviewer_count >= MAX_CLIENTS * 2)
+         {
+            return -1;
+         }
+         snprintf(reviewers[*reviewer_count], 32, "%s", name);
+         (*reviewer_count)++;
+      }
+   }
+   return 0;
+}
+
+static int save_game(unsigned long id, int rotation, const Client *player0,
+                     const Client *player1, const GameHistory *history)
 {
    FILE *file = fopen(GAMES_FILE, "a");
    if (file == NULL)
@@ -291,10 +385,27 @@ static int save_game(unsigned long id, int rotation, const char *player0,
       return -1;
    }
 
-   /* Keep the on-disk format aligned with read_saved_game(). */
-   int failed = fprintf(file, "GAME 1 %lu %d %s %s %lu\n", id, rotation,
-                       player0, player1,
-                       (unsigned long)history->count) < 0;
+   char reviewers[MAX_CLIENTS * 2][32];
+   size_t reviewer_count = 0;
+   if (add_reviewers_from_player(reviewers, &reviewer_count, player0,
+                                 player0->name, player1->name) != 0 ||
+       add_reviewers_from_player(reviewers, &reviewer_count, player1,
+                                 player0->name, player1->name) != 0)
+   {
+      fclose(file);
+      return -1;
+   }
+
+   /* Version 2 persists privacy and an end-of-game snapshot of both friend lists. */
+   int is_private = player0->private_mode || player1->private_mode;
+   int failed = fprintf(file, "GAME 2 %lu %d %d %s %s %lu %lu\n", id,
+                        rotation, is_private, player0->name, player1->name,
+                        (unsigned long)history->count,
+                        (unsigned long)reviewer_count) < 0;
+   for (size_t i = 0; !failed && i < reviewer_count; i++)
+   {
+      failed = fprintf(file, "ACCESS %s\n", reviewers[i]) < 0;
+   }
    for (size_t i = 0; !failed && i < history->count; i++)
    {
       failed = fprintf(file, "MOVE %d %d\n", history->moves[i].player,
@@ -393,6 +504,11 @@ static int send_saved_games(Client *clients, int sender)
          }
          break;
       }
+      if (!can_review_game(&game, clients[sender].name))
+      {
+         clear_history(&history);
+         continue;
+      }
       found_game = 1;
       char message[BUF_SIZE];
       snprintf(message, sizeof message, "SAVED_GAME %lu %d %s %s %lu\n",
@@ -437,6 +553,13 @@ static int send_game_review(Client *clients, int sender, unsigned long id)
       }
       if (game.id == id)
       {
+         if (!can_review_game(&game, clients[sender].name))
+         {
+            clear_history(&history);
+            fclose(file);
+            return write_error(clients, sender,
+                               "you are not allowed to review this private game");
+         }
          char message[BUF_SIZE];
          snprintf(message, sizeof message,
                   "REVIEW_BEGIN %lu %d %s %s %lu\n", game.id,
@@ -1016,12 +1139,13 @@ static int handle_line(Client *clients, int *active, int *pending_from,
    {
       int peer = game_peer[sender];
       int history_owner = role[sender] == 0 ? sender : peer;
+      int history_opponent = game_peer[history_owner];
       unsigned long saved_game_id = *next_game_id;
       /* Only a normal game completion reaches this path; disconnects discard its history. */
       int saved = saved_game_id != 0 &&
                   save_game(saved_game_id, rotation,
-                            clients[history_owner].name,
-                            clients[game_peer[history_owner]].name,
+                            &clients[history_owner],
+                            &clients[history_opponent],
                             &history[history_owner]) == 0;
       if (saved)
       {
