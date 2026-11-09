@@ -1,65 +1,75 @@
 # PR-Awale
 
-Jeu d'Awale en C, jouable à deux joueurs dans le terminal.
+A terminal-based Awale game written in C for two players.
 
-## Prérequis
+## Prerequisites
 
-Il faut un compilateur C, par exemple GCC.
+You need a C compiler, such as GCC.
 
-## Compiler et lancer
+## Build and run
 
-Depuis le dossier du projet, compilez les deux fichiers source :
+From the project directory, compile the two source files:
 
 ```bash
 gcc -Wall -Wextra -o awale main.c awale.c
 ```
 
-Puis lancez le programme :
+Then run the program:
 
 ```bash
 ./awale
 ```
 
-Sous Windows avec MinGW, la compilation crée `awale.exe`. Lancez-le avec :
+On Windows with MinGW, compilation creates `awale.exe`. Run it with:
 
 ```powershell
 .\awale.exe
 ```
 
-Au démarrage, choisissez le sens du joueur 0 : `0` pour clockwise ou `1` pour anticlockwise. Le joueur 1 joue dans le sens opposé. Entrez ensuite le numéro du trou à jouer lorsque le programme le demande.
+At startup, choose player 0's direction: `0` for clockwise or `1` for anticlockwise. Player 1 plays in the opposite direction. Then enter the number of the hole to play when prompted.
 
-## Fichiers principaux
+## Main files
 
-- `main.c` : boucle de jeu et saisie des coups.
-- `awale.c` : règles et logique du jeu.
-- `awale.h` : structures et déclarations partagées.
+- `main.c`: game loop and move input.
+- `awale.c`: game rules and logic.
+- `awale.h`: shared structures and declarations.
 
-## Jouer en réseau
+## Network play
 
-Le serveur accueille jusqu'à 32 clients dans un salon. Chaque client reçoit la liste des autres joueurs connectés ; les joueurs en partie y apparaissent avec le statut « in game » et ne peuvent pas être défiés. Les spectateurs apparaissent avec le statut « spectating ». Les joueurs en partie et les spectateurs ne reçoivent plus les mises à jour du salon. La commande `chat <message>` permet aux joueurs présents dans le salon d'échanger des messages ; pendant une partie, elle permet aux deux joueurs de discuter, et les spectateurs reçoivent aussi ces messages. Un spectateur ne peut pas envoyer de chat. La commande `bio` permet d'enregistrer jusqu'à 10 lignes de bio en ASCII imprimable, de 80 caractères maximum chacune. Appuyez sur Entrée pour ajouter une ligne vide, ou tapez `/done` pour terminer avant la dixième ligne ; la saisie s'arrête automatiquement après 10 lignes. La commande `bio <pseudo>` affiche la bio d'un joueur, ou indique qu'il n'en a pas encore enregistré. Pour devenir amis, utilisez `friend add <pseudo>` ; le joueur doit accepter avec `friend accept <pseudo>` ou refuser avec `friend reject <pseudo>`. Consultez les demandes reçues avec `friend requests`, et vos amis avec `friends`. `friend remove <pseudo>` retire l'amitié des deux côtés. Amis et demandes sont conservés en mémoire et supprimés des deux côtés lorsqu'un joueur se déconnecte. `private on` limite l'observation aux amis d'au moins un des deux joueurs ; être ami avec Alice ou Bob suffit. `private off` désactive cette restriction. Les spectateurs déjà présents sont renvoyés au salon si le changement de confidentialité leur retire l'accès. Les parties terminées sont archivées dans `games.txt`, dans le répertoire depuis lequel le serveur a été lancé. Utilisez `games` pour afficher les parties sauvegardées et `review <id>` pour revoir le plateau coup par coup. Seules les parties terminées normalement sont archivées ; une déconnexion en cours de partie n'enregistre pas de replay. Les commandes du salon sont `list`, `bio`, `bio <pseudo>`, `friend add <pseudo>`, `friend accept <pseudo>`, `friend reject <pseudo>`, `friend requests`, `friend remove <pseudo>`, `friends`, `private on`, `private off`, `games`, `review <id>`, `chat <message>`, `challenge <pseudo>`, `accept <pseudo>`, `reject <pseudo>`, `observe <pseudo>` et `quit`. Les pseudos doivent être uniques, sans espace et limités à 31 caractères.
+The server hosts up to 32 clients in a lobby. Each client receives a list of the other connected players; players currently in a game are listed as "in game" and cannot be challenged. Spectators are listed as "spectating". Players in a game and spectators no longer receive lobby updates. The `chat <message>` command lets players in the lobby exchange messages; during a game, it lets the two players chat, and spectators also receive those messages. Spectators cannot send chat messages.
 
-Une fois le défi accepté, les clients vérifient et appliquent localement les règles avec `awale.c`, tandis que le serveur relaie les coups et vérifie le tour et le côté du trou. Il ne vérifie pas toutes les règles : ce prototype est destiné à des joueurs de confiance.
+The `bio` command lets you save up to 10 lines of printable ASCII text, with a maximum of 80 characters per line. Press Enter to add a blank line, or type `/done` to finish before the tenth line; input ends automatically after 10 lines. The `bio <name>` command displays a player's bio or indicates that they have not saved one.
 
-Les replays des parties privées sont accessibles uniquement aux deux joueurs et aux personnes amies avec au moins l'un d'eux. Les amis au moment de la fin de partie sont enregistrés avec le replay pour conserver leurs droits après une déconnexion ; les amitiés en cours sont aussi prises en compte si le joueur concerné est connecté.
+To add a friend, use `friend add <name>`. The other player must accept with `friend accept <name>` or reject with `friend reject <name>`. Use `friend requests` to view incoming requests and `friends` to view your friends. `friend remove <name>` removes the friendship for both players. Friendships and requests are stored in memory and removed for both sides when a player disconnects.
 
-Sous Windows avec MinGW, compilez depuis la racine du projet :
+The `private on` command restricts spectating to friends of at least one of the two players; being friends with Alice or Bob is sufficient. `private off` disables this restriction. Spectators who lose access after a privacy change are returned to the lobby.
+
+Completed games are archived in `games.txt` in the directory from which the server was started. Use `games` to list saved games and `review <id>` to replay a game move by move. Only games completed normally are archived; games interrupted by a disconnection are not saved.
+
+The lobby commands are `list`, `bio`, `bio <name>`, `friend add <name>`, `friend accept <name>`, `friend reject <name>`, `friend requests`, `friend remove <name>`, `friends`, `private on`, `private off`, `games`, `review <id>`, `chat <message>`, `challenge <name>`, `accept <name>`, `reject <name>`, `observe <name>`, and `quit`. Names must be unique, contain no spaces, and be no longer than 31 characters.
+
+Once a challenge is accepted, clients validate and apply the rules locally using `awale.c`, while the server relays moves and checks whose turn it is and whether a move uses a hole on the correct side. The server does not validate every rule, so this prototype is intended for trusted players.
+
+Private game replays are accessible only to the two players and to people who are friends with at least one of them. Friends at the time the game ends are saved with the replay so they retain access after a disconnection; current friendships are also taken into account when the relevant player is connected.
+
+On Windows with MinGW, compile the server and client from the project root:
 
 ```powershell
 gcc -Wall -Wextra -o server.exe server/server.c -lws2_32
 gcc -Wall -Wextra -o client.exe client/client.c awale.c -lws2_32
 ```
 
-Lancez le serveur, avec `0` pour l'horaire ou `1` pour l'antihoraire :
+Start the server, using `0` for clockwise or `1` for anticlockwise:
 
 ```powershell
 .\server.exe 0
 ```
 
-Puis lancez un client dans chaque terminal :
+Then start a client in each terminal:
 
 ```powershell
 .\client.exe 127.0.0.1 Alice
 .\client.exe 127.0.0.1 Bob
 ```
 
-Pour jouer sur deux machines, remplacez `127.0.0.1` par l'adresse IP de la machine qui héberge le serveur et autorisez le port TCP `1977` dans son pare-feu. Arrêtez le serveur avec Ctrl+C.
+To play across two machines, replace `127.0.0.1` with the IP address of the machine hosting the server and allow TCP port `1977` through its firewall. Stop the server with Ctrl+C.
