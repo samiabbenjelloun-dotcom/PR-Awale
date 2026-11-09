@@ -40,6 +40,8 @@ Le serveur accueille jusqu'à 32 clients dans un salon. Chaque client reçoit la
 
 Une fois le défi accepté, les clients vérifient et appliquent localement les règles avec `awale.c`, tandis que le serveur relaie les coups et vérifie le tour et le côté du trou. Il ne vérifie pas toutes les règles : ce prototype est destiné à des joueurs de confiance.
 
+Les replays des parties privées sont accessibles uniquement aux deux joueurs et aux personnes amies avec au moins l'un d'eux. Les amis au moment de la fin de partie sont enregistrés avec le replay pour conserver leurs droits après une déconnexion ; les amitiés en cours sont aussi prises en compte si le joueur concerné est connecté.
+
 Sous Windows avec MinGW, compilez depuis la racine du projet :
 
 ```powershell

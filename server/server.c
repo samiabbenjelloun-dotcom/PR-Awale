@@ -84,7 +84,7 @@ static int send_all(SOCKET sock, const char *message)
    return 0;
 }
 
-static int find_player(Client *clients, int *active, const char *name)
+static int find_player(Client *clients, const int *active, const char *name)
 {
    for (int i = 0; i < MAX_CLIENTS; i++)
    {
@@ -295,7 +295,8 @@ static int read_saved_game(FILE *file, SavedGame *game, GameHistory *history)
    return 1;
 }
 
-static int can_review_game(const SavedGame *game, const char *name)
+static int can_review_game(const SavedGame *game, Client *clients,
+                           const int *active, const char *name)
 {
    if (!game->is_private ||
        strcmp(name, game->player0) == 0 ||
@@ -309,6 +310,22 @@ static int can_review_game(const SavedGame *game, const char *name)
       {
          return 1;
       }
+   }
+
+   for (int i = 0; i < MAX_CLIENTS; i++)
+   {
+      if (!active[i] || clients[i].name[0] == '\0' ||
+          strcmp(clients[i].name, name) != 0)
+      {
+         continue;
+      }
+
+      int player0 = find_player(clients, active, game->player0);
+      int player1 = find_player(clients, active, game->player1);
+      return (player0 >= 0 && is_friend(&clients[player0], name)) ||
+             (player1 >= 0 && is_friend(&clients[player1], name)) ||
+             is_friend(&clients[i], game->player0) ||
+             is_friend(&clients[i], game->player1);
    }
    return 0;
 }
@@ -470,7 +487,7 @@ static int write_error(Client *clients, int player, const char *message)
    return send_all(clients[player].sock, response);
 }
 
-static int send_saved_games(Client *clients, int sender)
+static int send_saved_games(Client *clients, int *active, int sender)
 {
    FILE *file = fopen(GAMES_FILE, "r");
    int found_game = 0;
@@ -504,7 +521,7 @@ static int send_saved_games(Client *clients, int sender)
          }
          break;
       }
-      if (!can_review_game(&game, clients[sender].name))
+      if (!can_review_game(&game, clients, active, clients[sender].name))
       {
          clear_history(&history);
          continue;
@@ -530,7 +547,8 @@ static int send_saved_games(Client *clients, int sender)
    return send_all(clients[sender].sock, "GAMES_END\n");
 }
 
-static int send_game_review(Client *clients, int sender, unsigned long id)
+static int send_game_review(Client *clients, int *active, int sender,
+                            unsigned long id)
 {
    FILE *file = fopen(GAMES_FILE, "r");
    if (file == NULL)
@@ -553,7 +571,7 @@ static int send_game_review(Client *clients, int sender, unsigned long id)
       }
       if (game.id == id)
       {
-         if (!can_review_game(&game, clients[sender].name))
+         if (!can_review_game(&game, clients, active, clients[sender].name))
          {
             clear_history(&history);
             fclose(file);
@@ -889,7 +907,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       {
          return write_error(clients, sender, "you must be in the lobby");
       }
-      return send_saved_games(clients, sender);
+      return send_saved_games(clients, active, sender);
    }
    if (sscanf(line, "REVIEW %lu %c", &game_id, &extra) == 1)
    {
@@ -897,7 +915,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       {
          return write_error(clients, sender, "you must be in the lobby");
       }
-      return send_game_review(clients, sender, game_id);
+      return send_game_review(clients, active, sender, game_id);
    }
 
    if (strcmp(line, "LIST") == 0)
