@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "awale.h"
 
@@ -220,29 +221,112 @@ int is_game_over(AwaleGame *game)
     return total_seeds == 0; // Game is over if there are no seeds left
 }
 
+#define BOARD_WIDTH 74
+#define BOARD_CELL_WIDTH 7
+
+static void print_board_border(void)
+{
+    putchar('+');
+    for (int i = 0; i < BOARD_WIDTH; i++)
+    {
+        putchar('-');
+    }
+    puts("+");
+}
+
+static void print_centered_board_line(const char *text)
+{
+    int length = (int)strlen(text);
+    int left_padding = (BOARD_WIDTH - length) / 2;
+    int right_padding = BOARD_WIDTH - length - left_padding;
+
+    putchar('|');
+    printf("%*s%s%*s|\n", left_padding, "", text, right_padding, "");
+}
+
+static void print_board_info_line(const char *left, const char *right)
+{
+    int content_width = BOARD_WIDTH - 4;
+    int left_length = (int)strlen(left);
+    int right_length = (int)strlen(right);
+    int padding = content_width - left_length - right_length;
+
+    putchar('|');
+    printf("  %s%*s%s  |\n", left, padding, "", right);
+}
+
+static void print_board_cells(const AwaleGame *game, int start, int style)
+{
+    int cell_count = NB_HOLES / 2;
+    int row_width = cell_count * BOARD_CELL_WIDTH;
+    int padding = (BOARD_WIDTH - row_width) / 2;
+
+    putchar('|');
+    printf("%*s", padding, "");
+    for (int i = start; i < start + cell_count; i++)
+    {
+        if (style == 0)
+        {
+            printf("  %02d   ", i + 1);
+        }
+        else if (style == 1)
+        {
+            printf("+----+ ");
+        }
+        else if (style == 2)
+        {
+            printf("| %02d | ", game->board[i]);
+        }
+        else
+        {
+            printf("  %02d   ", i + 1);
+        }
+    }
+    printf("%*s|\n", BOARD_WIDTH - row_width - padding, "");
+}
+
 void print_board(AwaleGame *game)
 {
-    printf("Current board:\n");
-    for (int row = 0; row < 2; row++)
-    {
-        int start = row * (NB_HOLES / 2);
-        const char *row_name = row == 0 ? "Top" : "Bottom";
+    char score[32];
+    int top_start = 0;
+    int bottom_start = NB_HOLES / 2;
 
-        printf("%s row (%s)\n", row_name, game->players[row].name);
-        for (int i = start; i < start + NB_HOLES / 2; i++)
-        {
-            printf("%4d", i + 1);
-        }
-        printf("\n");
-        for (int i = start; i < start + NB_HOLES / 2; i++)
-        {
-            printf("%4d", game->board[i]);
-        }
-        printf("\n");
-    }
-    printf("\nScores:\n   - %s: %d\n   - %s: %d\n",
-           game->players[0].name, game->players[0].score,
-           game->players[1].name, game->players[1].score);
+    print_board_border();
+    print_centered_board_line("A W A L E");
+    print_board_border();
+
+    print_board_info_line("", "");
+    snprintf(score, sizeof score, "SCORE : %02d", game->players[0].score);
+    print_board_info_line(game->players[0].name, score);
+    print_board_info_line("", "");
+
+    print_board_cells(game, top_start, 0);
+    print_board_cells(game, top_start, 1);
+    print_board_cells(game, top_start, 2);
+    print_board_cells(game, top_start, 1);
+
+    print_board_info_line("", "");
+    print_board_cells(game, bottom_start, 1);
+    print_board_cells(game, bottom_start, 2);
+    print_board_cells(game, bottom_start, 1);
+    print_board_cells(game, bottom_start, 3);
+
+    print_board_info_line("", "");
+    snprintf(score, sizeof score, "SCORE : %02d", game->players[1].score);
+    print_board_info_line(game->players[1].name, score);
+    print_board_info_line("", "");
+    print_board_border();
+
+    char turn[64];
+    snprintf(turn, sizeof turn, "TURN : %s (%s row)",
+             game->players[game->current_player].name,
+             game->current_player == 0 ? "top" : "bottom");
+    print_centered_board_line(turn);
+    int first_hole = game->current_player * (NB_HOLES / 2) + 1;
+    int last_hole = first_hole + NB_HOLES / 2 - 1;
+    snprintf(turn, sizeof turn, "HOLES : %02d-%02d", first_hole, last_hole);
+    print_centered_board_line(turn);
+    print_board_border();
 }
 
 void print_game_result(const AwaleGame *game)
