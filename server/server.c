@@ -628,7 +628,11 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       }
       if (find_player(clients, active, name) >= 0)
       {
-         return write_error(clients, sender, "that name is already in use");
+         if (write_error(clients, sender, "that name is already in use") != 0)
+         {
+            return -1;
+         }
+         return 1;
       }
       strcpy(clients[sender].name, name);
       printf("%s connected.\n", name);
