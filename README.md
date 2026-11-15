@@ -61,7 +61,3 @@ Most commands are available in the lobby; `chat <message>` also works during a g
 Friend requests and friendships are kept in memory and removed when a player disconnects. Spectators who lose access after a privacy change are returned to the lobby.
 
 Completed games are saved in `games.txt` in the directory where the server was started. Only games completed normally are archived; games interrupted by a disconnection are not saved. Private replays are accessible to the two players and people who were friends with at least one of them when the game ended. Current friendships are also taken into account while a player is connected.
-
-## Notes
-
-The server hosts up to 32 clients. Players in a game or watching a game do not receive lobby updates. During a match, clients apply and validate the Awale rules locally using `awale.c`; the server relays moves and checks whose turn it is and whether a move uses a hole on the correct side. The server does not validate every rule, so this prototype is intended for trusted players.
