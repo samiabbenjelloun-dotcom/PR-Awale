@@ -20,6 +20,7 @@ static void print_commands(void);
 #include <windows.h>
 #endif
 
+/* Start and stop the platform networking library. */
 static void init(void)
 {
 #ifdef WIN32
@@ -40,6 +41,7 @@ static void end(void)
 #endif
 }
 
+/* Send and receive complete lines over the server connection. */
 static int send_all(SOCKET sock, const char *message)
 {
    size_t length = strlen(message);
@@ -98,6 +100,7 @@ static int read_line(SOCKET sock, char *buffer, size_t capacity)
 }
 
 #ifdef WIN32
+/* Check whether the user has entered console input. */
 static int stdin_is_readable(void)
 {
    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
@@ -115,6 +118,7 @@ static int stdin_is_readable(void)
 }
 #endif
 
+/* Wait for either a server message or user input. */
 static int wait_for_input(SOCKET sock, int allow_stdin, int *socket_ready,
                           int *stdin_ready)
 {
@@ -154,6 +158,7 @@ static int wait_for_input(SOCKET sock, int allow_stdin, int *socket_ready,
    }
 }
 
+/* Show and send lobby commands entered by the user. */
 static void print_commands(void)
 {
    puts("Commands:");
@@ -266,6 +271,7 @@ static int send_lobby_command(SOCKET sock, const char *input)
    return 0;
 }
 
+/* Read and send a profile bio or a chat message. */
 static int send_bio(SOCKET sock)
 {
    char lines[BIO_MAX_LINES][BIO_LINE_MAX + 1];
@@ -369,6 +375,7 @@ static int send_chat_message(SOCKET sock, const char *input)
    return send_all(sock, message);
 }
 
+/* Display server replies and update the local game state. */
 static int handle_server_message(const char *line, AwaleGame *game,
                                  int *game_active, int *player_id,
                                  int *move_pending, int *end_sent,
@@ -420,6 +427,8 @@ static int handle_server_message(const char *line, AwaleGame *game,
       }
       return 0;
    }
+
+   /* Show saved games and start or finish a replay. */
    if (strcmp(line, "GAMES_BEGIN") == 0)
    {
       puts("\nSaved games:");
@@ -492,6 +501,8 @@ static int handle_server_message(const char *line, AwaleGame *game,
       puts("Replay finished; returned to the lobby.");
       return 0;
    }
+
+   /* Report whether the completed game was saved. */
    if (strncmp(line, "GAME_SAVED ", 11) == 0)
    {
       printf("Game saved as #%s.\n", line + 11);
@@ -502,6 +513,8 @@ static int handle_server_message(const char *line, AwaleGame *game,
       puts("The game ended, but the server could not save it.");
       return 0;
    }
+
+   /* Display friend lists, requests, and privacy updates. */
    if (strcmp(line, "FRIENDS_BEGIN") == 0)
    {
       puts("\nFriends:");
@@ -577,6 +590,8 @@ static int handle_server_message(const char *line, AwaleGame *game,
       puts("Private mode disabled.");
       return 0;
    }
+
+   /* Display profile information. */
    if (strncmp(line, "BIO_BEGIN ", 10) == 0)
    {
       printf("\nBio of %s:\n", line + 10);
@@ -596,6 +611,8 @@ static int handle_server_message(const char *line, AwaleGame *game,
       printf("%s does not have a bio.\n", line + 10);
       return 0;
    }
+
+   /* Confirm bio updates and display chat and challenge messages. */
    if (strcmp(line, "BIO_SAVED") == 0)
    {
       puts("Bio saved.");
@@ -633,6 +650,8 @@ static int handle_server_message(const char *line, AwaleGame *game,
       printf("Error: %s\n", line + 6);
       return 0;
    }
+
+   /* Start live games or spectating, then apply incoming moves. */
    if (strncmp(line, "START ", 6) == 0)
    {
       int rotation;
@@ -762,6 +781,7 @@ static int handle_server_message(const char *line, AwaleGame *game,
    return 0;
 }
 
+/* Connect to the server using its host name or IPv4 address. */
 static int connect_to_server(const char *address)
 {
    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -794,6 +814,7 @@ static int connect_to_server(const char *address)
    return sock;
 }
 
+/* Run the lobby, game, replay, and spectating user interface. */
 static void app(const char *address, const char *name)
 {
    SOCKET sock = connect_to_server(address);
@@ -1024,6 +1045,7 @@ static void app(const char *address, const char *name)
    closesocket(sock);
 }
 
+/* Validate command-line arguments and start the client. */
 int main(int argc, char **argv)
 {
    if (argc != 3 || strlen(argv[2]) > 31 || strchr(argv[2], ' ') != NULL)

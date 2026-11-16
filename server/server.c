@@ -42,6 +42,7 @@ typedef struct
 
 #define GAMES_FILE "games.txt"
 
+/* Start and stop the platform networking library. */
 static void init(void)
 {
 #ifdef WIN32
@@ -62,6 +63,7 @@ static void end(void)
 #endif
 }
 
+/* Send a complete message and provide helpers for player and friend lists. */
 static int send_all(SOCKET sock, const char *message)
 {
    size_t length = strlen(message);
@@ -84,6 +86,7 @@ static int send_all(SOCKET sock, const char *message)
    return 0;
 }
 
+/* Look up connected players and names in the server's lists. */
 static int find_player(Client *clients, const int *active, const char *name)
 {
    for (int i = 0; i < MAX_CLIENTS; i++)
@@ -96,6 +99,7 @@ static int find_player(Client *clients, const int *active, const char *name)
    return -1;
 }
 
+/* Search and update the fixed-size friend and request lists. */
 static int find_name(char names[MAX_CLIENTS][32], int count, const char *name)
 {
    for (int i = 0; i < count; i++)
@@ -135,6 +139,7 @@ static int is_friend(const Client *player, const char *name)
    return 0;
 }
 
+/* Check who may observe a game and remove spectators if access changes. */
 static int can_observe_game(Client *clients, int observer, int player_a,
                             int player_b)
 {
@@ -162,6 +167,7 @@ static void revoke_disallowed_spectators(Client *clients, int *active,
    }
 }
 
+/* Check that a bio line contains only allowed text. */
 static int valid_bio_line(const char *line)
 {
    size_t length = strlen(line);
@@ -181,6 +187,7 @@ static int valid_bio_line(const char *line)
    return 1;
 }
 
+/* Store game moves and read or write saved game records. */
 static int record_move(GameHistory *history, int player, int hole)
 {
    if (history->count == history->capacity)
@@ -208,6 +215,7 @@ static int record_move(GameHistory *history, int player, int hole)
 
 static void clear_history(GameHistory *history)
 {
+   /* Reset the list so it can safely be reused for another game. */
    free(history->moves);
    history->moves = NULL;
    history->count = 0;
@@ -295,6 +303,7 @@ static int read_saved_game(FILE *file, SavedGame *game, GameHistory *history)
    return 1;
 }
 
+/* Check whether a player may access a saved-game replay. */
 static int can_review_game(const SavedGame *game, Client *clients,
                            const int *active, const char *name)
 {
@@ -330,6 +339,7 @@ static int can_review_game(const SavedGame *game, Client *clients,
    return 0;
 }
 
+/* Find the next available ID in the saved-game archive. */
 static unsigned long load_next_game_id(void)
 {
    FILE *file = fopen(GAMES_FILE, "r");
@@ -358,6 +368,7 @@ static unsigned long load_next_game_id(void)
    return max_id == ULONG_MAX ? 0 : max_id + 1;
 }
 
+/* Build the list of players allowed to review private games. */
 static int add_reviewers_from_player(char reviewers[MAX_CLIENTS * 2][32],
                                      size_t *reviewer_count,
                                      const Client *player,
@@ -439,6 +450,7 @@ static int save_game(unsigned long id, int rotation, const Client *player0,
    return failed ? -1 : 0;
 }
 
+/* Send player lists, errors, saved games, and game replays to clients. */
 static int send_player_list(SOCKET sock, int recipient, Client *clients,
                             int *active, int *game_peer, int *spectating)
 {
@@ -547,6 +559,7 @@ static int send_saved_games(Client *clients, int *active, int sender)
    return send_all(clients[sender].sock, "GAMES_END\n");
 }
 
+/* Send the selected replay's setup and moves to the requesting player. */
 static int send_game_review(Client *clients, int *active, int sender,
                             unsigned long id)
 {
@@ -640,6 +653,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       return 0;
    }
 
+   /* Handle profile and bio commands. */
    if (strcmp(line, "BIO_SET_BEGIN") == 0)
    {
       if (game_peer[sender] >= 0 || spectating[sender] >= 0)
@@ -720,6 +734,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       return send_all(clients[sender].sock, "BIO_END\n");
    }
 
+   /* Handle friend lists, requests, and friend changes. */
    if (strcmp(line, "FRIENDS") == 0)
    {
       if (send_all(clients[sender].sock, "FRIENDS_BEGIN\n") != 0)
@@ -836,6 +851,8 @@ static int handle_line(Client *clients, int *active, int *pending_from,
                clients[sender].name);
       return send_all(clients[requester].sock, message);
    }
+
+   /* Remove a request or friendship from the relevant player lists. */
    if (sscanf(line, "FRIEND_REJECT %31s %c", name, &extra) == 1)
    {
       char message[BUF_SIZE];
@@ -891,6 +908,8 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       }
       return 0;
    }
+
+   /* Handle privacy settings and saved-game requests. */
    if (sscanf(line, "SET_PRIVATE %3s %c", name, &extra) == 1)
    {
       if (strcmp(name, "ON") != 0 && strcmp(name, "OFF") != 0)
@@ -922,6 +941,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       return send_game_review(clients, active, sender, game_id);
    }
 
+   /* Return the current lobby player list. */
    if (strcmp(line, "LIST") == 0)
    {
       if (game_peer[sender] >= 0 || spectating[sender] >= 0)
@@ -932,6 +952,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
                               game_peer, spectating);
    }
 
+   /* Relay chat messages to the lobby or the sender's game. */
    if (strncmp(line, "CHAT ", 5) == 0)
    {
       const char *text = line + 5;
@@ -980,6 +1001,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       return 0;
    }
 
+   /* Handle challenges, turns, and live game moves. */
    if (sscanf(line, "CHALLENGE %31s %c", name, &extra) == 1)
    {
       int target = find_player(clients, active, name);
@@ -1011,6 +1033,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       return send_all(clients[sender].sock, message);
    }
 
+   /* Start a game when its pending challenge is accepted. */
    if (sscanf(line, "ACCEPT %31s %c", name, &extra) == 1 ||
        sscanf(line, "REJECT %31s %c", name, &extra) == 1)
    {
@@ -1058,6 +1081,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       return 0;
    }
 
+   /* Validate each move and relay it to both players and their spectators. */
    int player;
    int hole;
    if (game_peer[sender] >= 0 &&
@@ -1103,6 +1127,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
       return 0;
    }
 
+   /* Start or stop observing games and save completed games. */
    if (sscanf(line, "OBSERVE %31s %c", name, &extra) == 1)
    {
       int target = find_player(clients, active, name);
@@ -1218,6 +1243,7 @@ static int handle_line(Client *clients, int *active, int *pending_from,
                       "commands: LIST, GAMES, REVIEW <id>, CHALLENGE <name>, ACCEPT <name>, REJECT <name>, OBSERVE <name>, STOP_OBSERVING");
 }
 
+/* Clean up a disconnected player and notify affected clients. */
 static void disconnect_player(Client *clients, int *active, int *pending_from,
                               int *pending_to, int *game_peer, int *role,
                               int *spectating, GameHistory *history, int player)
@@ -1227,6 +1253,7 @@ static void disconnect_player(Client *clients, int *active, int *pending_from,
    int challenger = pending_from[player];
    int history_owner = -1;
 
+   /* Notify the opponent and spectators if a game is interrupted. */
    if (peer >= 0 && active[peer])
    {
       game_peer[peer] = -1;
@@ -1245,6 +1272,8 @@ static void disconnect_player(Client *clients, int *active, int *pending_from,
       }
       clear_history(&history[history_owner]);
    }
+
+   /* Cancel any pending challenge involving this player. */
    if (challenger >= 0 && active[challenger])
    {
       snprintf(message, sizeof message, "CHALLENGE_CANCELLED %s\n",
@@ -1268,6 +1297,7 @@ static void disconnect_player(Client *clients, int *active, int *pending_from,
       }
    }
 
+   /* Remove friendships and pending requests linked to this player. */
    for (int i = 0; i < MAX_CLIENTS; i++)
    {
       if (i == player || !active[i])
@@ -1314,6 +1344,7 @@ static void disconnect_player(Client *clients, int *active, int *pending_from,
    broadcast_player_lists(clients, active, game_peer, spectating);
 }
 
+/* Accept connections and process messages from all active clients. */
 static void app(int rotation)
 {
    SOCKET listener = init_connection();
@@ -1369,6 +1400,7 @@ static void app(int rotation)
          break;
       }
 
+      /* Accept new clients and assign each one a free slot. */
       if (FD_ISSET(listener, &readable))
       {
          SOCKADDR_IN address = {0};
@@ -1415,6 +1447,7 @@ static void app(int rotation)
          }
       }
 
+      /* Read client data, assemble complete lines, and handle each command. */
       for (int i = 0; i < MAX_CLIENTS; i++)
       {
          if (!active[i] || !FD_ISSET(clients[i].sock, &readable))
@@ -1484,6 +1517,7 @@ static void app(int rotation)
    end_connection(listener);
 }
 
+/* Create the listening socket and close it when the server stops. */
 static SOCKET init_connection(void)
 {
    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -1518,6 +1552,7 @@ static void end_connection(int sock)
    closesocket(sock);
 }
 
+/* Parse options, initialize networking, and run the server. */
 int main(int argc, char **argv)
 {
    int rotation = 0;
